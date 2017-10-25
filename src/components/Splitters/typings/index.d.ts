@@ -1,4 +1,5 @@
 ﻿import { ComponentClass } from "react";
+import * as React from 'react';
 
 // ------ Splitter interfaces
 export type handlePositionType = 'vertical' | 'horizontal'; 
@@ -52,7 +53,7 @@ export interface HandleBarProps {
     allowResize?: Boolean;
 }
 
-declare const Splitter: ComponentClass<SplitterProps>;
+declare class Splitter extends React.Component<SplitterProps, {}> {}
 
 export as namespace Splitter;
 
