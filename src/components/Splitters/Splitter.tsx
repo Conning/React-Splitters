@@ -25,12 +25,12 @@ interface SplitterState {
     handleMouseMove: (e: Event) => void;
 }
 
-interface SplitterForwardRef {
+export interface SplitterRef {
     getState: () => SplitterState;
     getRoot: () => HTMLDivElement;
 }
 
-export const Splitter = React.forwardRef<SplitterForwardRef, SplitterProps>(({
+export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
     position = 'vertical' as handlePositionType,
     postPoned = false,
     dispatchResize = false,
