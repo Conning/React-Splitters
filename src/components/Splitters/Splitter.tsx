@@ -156,10 +156,14 @@ export const Splitter: React.FC<SplitterProps> = ({
             }
         }
 
+        let newPosistionState = {
+            maxMousePosition
+        };
         setState((prev: SplitterState) => ({
             ...prev,
-            maxMousePosition
+            ...newPosistionState
         }));
+        return newPosistionState;
     }, [position, primaryPaneMaxWidth, primaryPaneMaxHeight]);
 
     const handleMouseUp = useCallback((e: any) => {
@@ -209,7 +213,7 @@ export const Splitter: React.FC<SplitterProps> = ({
         }
 
         if (React.Children.count(children) > 1) {
-            getSize(lastX, lastY);
+            getSize(e, lastX, lastY);
         }
     }, [state.isDragging, state.handleBarOffsetFromParent, state.lastX, state.lastY, state.maxMousePosition, state.handleMouseMove, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned, dispatchResize, onDragFinished, children]);
 
@@ -256,8 +260,9 @@ export const Splitter: React.FC<SplitterProps> = ({
             clientY = e.touches[0].clientY;
         }
 
+        let sizeState;
         if (React.Children.count(children) > 1) {
-            getSize(e, clientX, clientY);
+            sizeState = getSize(e, clientX, clientY);
         }
 
         if (position === 'horizontal') {
@@ -268,7 +273,8 @@ export const Splitter: React.FC<SplitterProps> = ({
 
         const newState = {
             isDragging: true,
-            handleBarOffsetFromParent
+            handleBarOffsetFromParent,
+            ...sizeState
         };
 
         const handleMouseMove = getHandleMouseMove({ ...state, ...newState }, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned);
