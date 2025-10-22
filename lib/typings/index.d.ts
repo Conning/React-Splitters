@@ -58,7 +58,7 @@ export interface SplitterRef {
 	getRoot: () => HTMLDivElement;
 }
 
-declare class Splitter extends React.Component<SplitterProps, {}> {}
+declare const Splitter: React.ForwardRefExoticComponent<SplitterProps & React.RefAttributes<SplitterRef>>;
 
 export as namespace Splitter;
 
