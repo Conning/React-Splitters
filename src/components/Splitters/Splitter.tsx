@@ -22,6 +22,7 @@ interface SplitterState {
     lastY?: number;
     handleBarClonePosition?: number;
     isVisible?: boolean;
+    handleMouseMove: (e: Event) => void;
 }
 
 export const Splitter: React.FC<SplitterProps> = ({
@@ -45,113 +46,64 @@ export const Splitter: React.FC<SplitterProps> = ({
     hasDetailPane
 }) => {
     const [state, setState] = useState<SplitterState>({
-        isDragging: false
+        isDragging: false,
+        handleMouseMove: (e) => { console.log(e); }
     });
 
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const panePrimaryRef = useRef<HTMLDivElement>(null);
     const handlebarRef = useRef<HTMLDivElement>(null);
-    const paneNotPrimaryRef = useRef<any>(null);
+    const paneNotPrimaryRef = useRef<HTMLDivElement>(null);
 
-    const handleMouseMove = useCallback((e: any) => {
-        /********************************
-        * check if the state is still isDragging, if not, stop the function
-        * unselectAll - unselect all selected text
-        * check position of mouse in the splitter and and set the width or height of primary pane
-        * save last positions of X and Y coords (that is necessary for touch screen)
-        ********************************/
-        if (!state.isDragging) {
-            return;
-        }
-        
-        unselectAll();
+    const getHandleMouseMove = useCallback((state, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned) => {
+        return (e: MouseEvent | TouchEvent) => {
+            /********************************
+            * check if the state is still isDragging, if not, stop the function
+            * unselectAll - unselect all selected text
+            * check position of mouse in the splitter and and set the width or height of primary pane
+            * save last positions of X and Y coords (that is necessary for touch screen)
+            ********************************/
+            if (!state.isDragging) {
+                return;
+            }
+            
+            unselectAll();
 
-        const {
-            handleBarOffsetFromParent = 0,
-            maxMousePosition = 0
-        } = state;
+            const {
+                handleBarOffsetFromParent = 0,
+                maxMousePosition = 0
+            } = state;
 
-        let clientX: number = 0;
-        let clientY: number = 0;
+            let clientX: number = 0;
+            let clientY: number = 0;
 
-        if (e.type === 'mousemove') {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        } else if (e.type === 'touchmove') {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        }
+            if (e.type === 'mousemove') {
+                clientX = (e as MouseEvent).clientX;
+                clientY = (e as MouseEvent).clientY;
+            } else if (e.type === 'touchmove') {
+                clientX = (e as TouchEvent).touches[0].clientX;
+                clientY = (e as TouchEvent).touches[0].clientY;
+            }
 
-        const primaryPanePosition = getPrimaryPaneWidth(position, clientX, clientY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
-
-        if (postPoned) {
-            setState((prev: SplitterState) => ({
-                ...prev,
-                handleBarClonePosition: primaryPanePosition,
-                lastX: clientX,
-                lastY: clientY,
-                isVisible: true
-            }));
-        } else {
-            setState((prev: SplitterState) => ({
-                ...prev,
-                primaryPane: primaryPanePosition,
-                lastX: clientX,
-                lastY: clientY
-            }));
-        }
-    }, [state.isDragging, state.handleBarOffsetFromParent, state.maxMousePosition, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned]);
-
-    const handleMouseUp = useCallback((e: any) => {
-        /********************************
-        * Dispatch event is for components which resizes on window resize
-        ********************************/
-        if (!state.isDragging) {
-            return;
-        }
-
-        const {
-            handleBarOffsetFromParent = 0,
-            lastX = 0,
-            lastY = 0,
-            maxMousePosition = 0
-        } = state;
-
-        const primaryPanePosition = getPrimaryPaneWidth(position, lastX, lastY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
-
-        if (postPoned) {
-            setState((prev: SplitterState) => ({
-                ...prev,
-                isDragging: false,
-                isVisible: false,
-                primaryPane: primaryPanePosition
-            }));
-        } else {
-            setState((prev: SplitterState) => ({
-                ...prev,
-                isDragging: false,
-                primaryPane: primaryPanePosition
-            }));
-        }
-
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('touchmove', handleMouseMove);
-
-        // call resize event to trigger method for updating of DataGrid width
-        // TODO: add this event for IE11
-        if (typeof dispatchResize === 'boolean') {
-            window.dispatchEvent(new Event('resize'));
-        }
-
-        // callback function from parent component
-        if (typeof onDragFinished === 'function') {
-            onDragFinished();
-        }
-
-        if (React.Children.count(children) > 1) {
-            getSize(lastX, lastY);
-        }
-    }, [state.isDragging, state.handleBarOffsetFromParent, state.lastX, state.lastY, state.maxMousePosition, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned, handleMouseMove, dispatchResize, onDragFinished, children]);
+            const primaryPanePosition = getPrimaryPaneWidth(position, clientX, clientY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
+            if (postPoned) {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    handleBarClonePosition: primaryPanePosition,
+                    lastX: clientX,
+                    lastY: clientY,
+                    isVisible: true
+                }));
+            } else {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    primaryPane: primaryPanePosition,
+                    lastX: clientX,
+                    lastY: clientY
+                }));
+            }
+        };
+    }, []);
 
     const getSize = useCallback((event, cX?: number, cY?: number) => {
         /********************************
@@ -161,12 +113,14 @@ export const Splitter: React.FC<SplitterProps> = ({
         let nodeWrapperSize: number;
         let primaryPaneOffset: number;
         
-        if (!paneWrapperRef.current || !panePrimaryRef.current) return;
-        
+        if (!paneWrapperRef.current || !panePrimaryRef.current) {
+            return;
+        }
+
         let wrapper = paneWrapperRef.current.getBoundingClientRect();
         let primaryPane = panePrimaryRef.current.getBoundingClientRect();
         let handleBarSize = handlebarRef.current ? handlebarRef.current.getBoundingClientRect() : { left: 0, top: 0 , width: 0, height: 0};
-	    const posInHandleBar = position === 'vertical'
+        const posInHandleBar = position === 'vertical'
             ? handleBarSize.left - (cX || 0)
             : handleBarSize.top - (cY || 0);
 
@@ -207,6 +161,57 @@ export const Splitter: React.FC<SplitterProps> = ({
             maxMousePosition
         }));
     }, [position, primaryPaneMaxWidth, primaryPaneMaxHeight]);
+
+    const handleMouseUp = useCallback((e: any) => {
+        /********************************
+        * Dispatch event is for components which resizes on window resize
+        ********************************/
+        if (!state.isDragging) {
+            return;
+        }
+
+        const {
+            handleBarOffsetFromParent = 0,
+            lastX = 0,
+            lastY = 0,
+            maxMousePosition = 0
+        } = state;
+
+        const primaryPanePosition = getPrimaryPaneWidth(position, lastX, lastY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
+
+        if (postPoned) {
+            setState((prev: SplitterState) => ({
+                ...prev,
+                isDragging: false,
+                isVisible: false,
+                primaryPane: primaryPanePosition
+            }));
+        } else {
+            setState((prev: SplitterState) => ({
+                ...prev,
+                isDragging: false,
+                primaryPane: primaryPanePosition
+            }));
+        }
+
+        document.removeEventListener('mousemove', state.handleMouseMove);
+        document.removeEventListener('touchmove', state.handleMouseMove);
+
+        // call resize event to trigger method for updating of DataGrid width
+        // TODO: add this event for IE11
+        if (typeof dispatchResize === 'boolean') {
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        // callback function from parent component
+        if (typeof onDragFinished === 'function') {
+            onDragFinished();
+        }
+
+        if (React.Children.count(children) > 1) {
+            getSize(lastX, lastY);
+        }
+    }, [state.isDragging, state.handleBarOffsetFromParent, state.lastX, state.lastY, state.maxMousePosition, state.handleMouseMove, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned, dispatchResize, onDragFinished, children]);
 
     // Effect to set up event listeners
     useEffect(() => {
@@ -261,17 +266,21 @@ export const Splitter: React.FC<SplitterProps> = ({
             handleBarOffsetFromParent = clientX - e.target.offsetLeft;
         }
 
-        setState((prev: SplitterState) => ({
-            ...prev,
+        const newState = {
             isDragging: true,
             handleBarOffsetFromParent
+        };
+
+        const handleMouseMove = getHandleMouseMove({ ...state, ...newState }, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned);
+        setState((prev: SplitterState) => ({
+            ...prev,
+            ...newState,
+            handleMouseMove
         }));
+
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('touchmove', handleMouseMove);
-    }, [allowResize, children, getSize, position, handleMouseMove]);
-
-
-
+    }, [allowResize, children, getSize, position]);
 
     /********************************
      * set width of primary pane according to props, or state
@@ -328,6 +337,8 @@ export const Splitter: React.FC<SplitterProps> = ({
             }
             break;
         }
+
+        default:
     }
 
     let onePaneStyle: any = undefined;

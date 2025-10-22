@@ -1,8 +1,7 @@
 import * as React from 'react';
-import { forwardRef } from 'react';
 import { HandleBarProps } from './typings/index';
 
-const HandleBar = forwardRef<HTMLDivElement, HandleBarProps>(({ 
+const HandleBar = React.forwardRef<HTMLDivElement, HandleBarProps>(({ 
     position, 
     handleMouseDown, 
     allowResize = true 

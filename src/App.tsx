@@ -15,11 +15,11 @@ class App extends React.Component<{}, AppState> {
     this.setState({
       maxPrimaryPane: !this.state.maxPrimaryPane
     });
-  };
+  }
 
   onDragFinishedCallback() {
     console.log('callback');
-  };
+  }
 
   render() {
     return (
