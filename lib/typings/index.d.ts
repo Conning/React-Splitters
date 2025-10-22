@@ -53,6 +53,11 @@ export interface HandleBarProps {
 	allowResize?: Boolean;
 }
 
+export interface SplitterRef {
+	getState: () => SplitterState;
+	getRoot: () => HTMLDivElement;
+}
+
 declare class Splitter extends React.Component<SplitterProps, {}> {}
 
 export as namespace Splitter;
