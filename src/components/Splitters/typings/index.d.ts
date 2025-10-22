@@ -50,7 +50,7 @@ export interface HandleBarProps {
     allowResize?: Boolean;
 }
 
-export declare class Splitter extends React.Component<SplitterProps, {}> {}
+export declare const Splitter: React.FC<SplitterProps>;
 
 export as namespace Splitter;
 
