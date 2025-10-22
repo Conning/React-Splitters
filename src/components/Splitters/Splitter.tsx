@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useImperativeHandle } from 'react';
 /********************************
 * import files needed for splitter to work
 ********************************/
@@ -25,7 +25,12 @@ interface SplitterState {
     handleMouseMove: (e: Event) => void;
 }
 
-export const Splitter: React.FC<SplitterProps> = ({
+interface SplitterForwardRef {
+    getState: () => SplitterState;
+    getRoot: () => HTMLDivElement;
+}
+
+export const Splitter = React.forwardRef<SplitterForwardRef, SplitterProps>(({
     position = 'vertical' as handlePositionType,
     postPoned = false,
     dispatchResize = false,
@@ -44,7 +49,7 @@ export const Splitter: React.FC<SplitterProps> = ({
     allowResize,
     onDragFinished,
     hasDetailPane
-}) => {
+}, ref) => {
     const [state, setState] = useState<SplitterState>({
         isDragging: false,
         handleMouseMove: (e) => { console.log(e); }
@@ -55,6 +60,13 @@ export const Splitter: React.FC<SplitterProps> = ({
     const handlebarRef = useRef<HTMLDivElement>(null);
     const paneNotPrimaryRef = useRef<HTMLDivElement>(null);
 
+    useImperativeHandle(ref, () => {
+        return {
+            getState() { return state; },
+            getRoot() { return paneWrapperRef.current as HTMLDivElement; }
+        };
+    }, [state, panePrimaryRef.current]);
+    
     const getHandleMouseMove = useCallback((state, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned) => {
         return (e: MouseEvent | TouchEvent) => {
             /********************************
@@ -412,4 +424,4 @@ export const Splitter: React.FC<SplitterProps> = ({
             }
         </div>
     );
-};
+});
