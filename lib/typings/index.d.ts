@@ -56,6 +56,7 @@ export interface HandleBarProps {
 export interface SplitterRef {
 	getState: () => SplitterState;
 	getRoot: () => HTMLDivElement;
+	resetState: () => void;
 }
 
 declare const Splitter: React.ForwardRefExoticComponent<SplitterProps & React.RefAttributes<SplitterRef>>;

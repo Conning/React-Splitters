@@ -28,6 +28,7 @@ interface SplitterState {
 export interface SplitterRef {
     getState: () => SplitterState;
     getRoot: () => HTMLDivElement;
+    resetState: () => void;
 }
 
 export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
@@ -63,7 +64,18 @@ export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
     useImperativeHandle(ref, () => {
         return {
             getState() { return state; },
-            getRoot() { return paneWrapperRef.current as HTMLDivElement; }
+            getRoot() { return paneWrapperRef.current as HTMLDivElement; },
+            resetState() {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    handleBarOffsetFromParent: 0,
+                    isDragging: false,
+                    lastX: 0,
+                    lastY: 0,
+                    maxMousePosition: 0,
+                    primaryPane: 0
+                }));
+            }
         };
     }, [state, panePrimaryRef.current]);
     
