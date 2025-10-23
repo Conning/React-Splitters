@@ -1,16 +1,16 @@
 {
   "name": "m-react-splitters",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "private": false,
   "main": "./lib/index",
-  "homepage": "https://martinnov92.github.io/React-Splitters/",
+  "homepage": "https://github.com/Conning/React-Splitters/",
   "license": "MIT",
   "author": "Martin Novák <martinnovak@outlook.com>",
   "description": "Splitter component for React, written in TypeScript",
   "typings": "./lib/typings/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/martinnov92/React-Splitters"
+    "url": "https://github.com/Conning/React-Splitters"
   },
   "keywords": [
     "react",
@@ -23,17 +23,25 @@
     "es6"
   ],
   "devDependencies": {
-    "npm-run-all": "^4.0.2",
-    "react-scripts-ts": "3.1.0",
-    "sass": "1.93.2",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
     "@types/node": "22.18.9",
     "@types/react": "^17.0.87",
     "@types/react-dom": "^17.0.26",
+    "npm-run-all": "^4.0.2",
+    "sass": "1.93.2",
+    "react-scripts-ts": "3.1.0",
+    "typescript": "^5.9.3",
     "react": "17.0.2",
     "react-dom": "17.0.2"
+  },
+  "peerDependencies": {
+    "@types/react": ">=16.8.0",
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+        "optional": true
+    }
   },
   "scripts": {
     "tsc-compile": "tsc ./src/components/Splitters/*.tsx --outDir ./lib --jsx react --target ES5",
