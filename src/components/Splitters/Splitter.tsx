@@ -72,7 +72,7 @@ export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
                     isDragging: false,
                     lastX: 0,
                     lastY: 0,
-                    maxMousePosition: 0,
+                    maxMousePosition: undefined,
                     primaryPane: 0
                 }));
             }
@@ -94,8 +94,8 @@ export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
             unselectAll();
 
             const {
-                handleBarOffsetFromParent = 0,
-                maxMousePosition = 0
+                handleBarOffsetFromParent,
+                maxMousePosition
             } = state;
 
             let clientX: number = 0;

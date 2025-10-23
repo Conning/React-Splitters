@@ -24,6 +24,7 @@ export function getPrimaryPaneWidth
             } else {
                 primaryPanePosition = lastY - handleBarOffsetFromParent;
             }
+            console.log('lastY', lastY, 'maxMousePosition', maxMousePosition, 'primaryPanePosition', primaryPanePosition);
             break;
         }
         case 'vertical':
