@@ -1,12 +1,15 @@
 import * as React from 'react';
 
 import Splitter from './components/Splitters';
+import type { SplitterRef } from './components/Splitters/Splitter';
 
 interface AppState {
   maxPrimaryPane?: Boolean;
 }
 
 class App extends React.Component<{}, AppState> {
+  ref = React.createRef<SplitterRef>();
+
   state = {
     maxPrimaryPane: false
   };
@@ -15,17 +18,21 @@ class App extends React.Component<{}, AppState> {
     this.setState({
       maxPrimaryPane: !this.state.maxPrimaryPane
     });
-  };
+  }
 
-  onDragFinishedCallback() {
-    console.log('callback');
-  };
+  onDragFinishedCallback = () => {
+    console.log('callback', this.ref);
+    if (this.ref.current) {
+      console.log('Splitter State:', this.ref.current.getState(), this.ref.current.getRoot());
+    }
+  }
 
   render() {
     return (
       <div className="app">
         <div className="splitter-wrapper">
           <Splitter
+            ref={this.ref}
             position="horizontal"
             maximizedPrimaryPane={this.state.maxPrimaryPane}
             minimalizedPrimaryPane={false}

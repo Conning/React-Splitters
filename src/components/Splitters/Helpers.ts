@@ -1,6 +1,6 @@
 ﻿export function unselectAll() {
     try {
-        window.getSelection().removeAllRanges();
+        window.getSelection()?.removeAllRanges();
     } catch (e) {
         console.warn(e);
     }

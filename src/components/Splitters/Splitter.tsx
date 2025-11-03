@@ -1,67 +1,160 @@
 import * as React from 'react';
-import * as ReactDOM from 'react-dom';
+import { useCallback, useEffect, useRef, useState, useImperativeHandle } from 'react';
 /********************************
 * import files needed for splitter to work
 ********************************/
 import Pane from './Pane';
 import HandleBar from './HandleBar';
 import { unselectAll, getPrimaryPaneWidth } from './Helpers';
-import { SplitterProps, SplitterState } from './typings/index';
+import { SplitterProps } from './typings/index';
+import type { handlePositionType } from './typings/index';
 import './splitters.css';
 
 // TODO: 
 // * uložit stav splitteru do localStorage,nebo někam jinam, bude na to callback funkce
 
-export class Splitter extends React.Component<SplitterProps, SplitterState> {
-    public static defaultProps: Partial<SplitterProps> = {
-        position: 'vertical',
-        postPoned: false,
-        dispatchResize: false,
-        primaryPaneMaxWidth: '80%',
-        primaryPaneMinWidth: 300,
-        primaryPaneWidth: '50%',
-        primaryPaneMaxHeight: '80%',
-        primaryPaneMinHeight: 300,
-        primaryPaneHeight: '50%'
-    };
-    
-    paneWrapper: any;
-    panePrimary: any;
-    handlebar: any;
-    paneNotPrimary: any;
+interface SplitterState {
+    isDragging: boolean;
+    maxMousePosition?: number;
+    handleBarOffsetFromParent?: number;
+    primaryPane?: number;
+    lastX?: number;
+    lastY?: number;
+    handleBarClonePosition?: number;
+    isVisible?: boolean;
+    handleMouseMove: (e: Event) => void;
+}
 
-    constructor() {
-        super();
-        this.handleMouseDown = this.handleMouseDown.bind(this);
-        this.handleMouseUp = this.handleMouseUp.bind(this);
-        this.handleMouseMove = this.handleMouseMove.bind(this);
-        this.getSize = this.getSize.bind(this);
-        this.state = {
-            isDragging: false
+export interface SplitterRef {
+    getState: () => SplitterState;
+    getRoot: () => HTMLDivElement;
+    resetState: () => void;
+}
+
+export const Splitter = React.forwardRef<SplitterRef, SplitterProps>(({
+    position = 'vertical' as handlePositionType,
+    postPoned = false,
+    dispatchResize = false,
+    primaryPaneMaxWidth = '80%',
+    primaryPaneMinWidth = 300,
+    primaryPaneWidth = '50%',
+    primaryPaneMaxHeight = '80%',
+    primaryPaneMinHeight = 300,
+    primaryPaneHeight = '50%',
+    children,
+    className,
+    primaryPaneClassName,
+    secondaryPaneClassName,
+    maximizedPrimaryPane,
+    minimalizedPrimaryPane,
+    allowResize,
+    onDragFinished,
+    hasDetailPane
+}, ref) => {
+    const [state, setState] = useState<SplitterState>({
+        isDragging: false,
+        handleMouseMove: (e) => { console.log(e); }
+    });
+
+    const paneWrapperRef = useRef<HTMLDivElement>(null);
+    const panePrimaryRef = useRef<HTMLDivElement>(null);
+    const handlebarRef = useRef<HTMLDivElement>(null);
+    const paneNotPrimaryRef = useRef<HTMLDivElement>(null);
+
+    useImperativeHandle(ref, () => {
+        return {
+            getState() { return state; },
+            getRoot() { return paneWrapperRef.current as HTMLDivElement; },
+            resetState() {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    handleBarOffsetFromParent: 0,
+                    isDragging: false,
+                    lastX: 0,
+                    lastY: 0,
+                    maxMousePosition: undefined,
+                    primaryPane: 0
+                }));
+            }
         };
-    }
+    }, [state, panePrimaryRef.current]);
+    
+    const getHandleMouseMove = useCallback((state, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned) => {
+        return (e: MouseEvent | TouchEvent) => {
+            /********************************
+            * check if the state is still isDragging, if not, stop the function
+            * unselectAll - unselect all selected text
+            * check position of mouse in the splitter and and set the width or height of primary pane
+            * save last positions of X and Y coords (that is necessary for touch screen)
+            ********************************/
+            if (!state.isDragging) {
+                return;
+            }
+            
+            unselectAll();
 
-    getSize(cX?: Number | any, cY?: Number | any) {
+            const {
+                handleBarOffsetFromParent,
+                maxMousePosition
+            } = state;
+
+            let clientX: number = 0;
+            let clientY: number = 0;
+
+            if (e.type === 'mousemove') {
+                clientX = (e as MouseEvent).clientX;
+                clientY = (e as MouseEvent).clientY;
+            } else if (e.type === 'touchmove') {
+                clientX = (e as TouchEvent).touches[0].clientX;
+                clientY = (e as TouchEvent).touches[0].clientY;
+            }
+
+            const primaryPanePosition = getPrimaryPaneWidth(position, clientX, clientY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
+            if (postPoned) {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    handleBarClonePosition: primaryPanePosition,
+                    lastX: clientX,
+                    lastY: clientY,
+                    isVisible: true
+                }));
+            } else {
+                setState((prev: SplitterState) => ({
+                    ...prev,
+                    primaryPane: primaryPanePosition,
+                    lastX: clientX,
+                    lastY: clientY
+                }));
+            }
+        };
+    }, []);
+
+    const getSize = useCallback((event, cX?: number, cY?: number) => {
         /********************************
         * This function calculates the max position of a mouse in the current splitter from given percentage.
         /********************************/
-        let maxMousePosition;
-        let nodeWrapperSize;
-        let primaryPaneOffset;
-        let wrapper = ReactDOM.findDOMNode(this.paneWrapper).getBoundingClientRect();
-        let primaryPane = ReactDOM.findDOMNode(this.panePrimary).getBoundingClientRect();
-        let handleBarSize = this.handlebar ? ReactDOM.findDOMNode(this.handlebar).getBoundingClientRect() : { left: 0, top: 0 , width: 0, height: 0};
-	    const posInHandleBar = this.props.position === 'vertical'
-            ? handleBarSize.left - cX
-            : handleBarSize.top - cY;
+        let maxMousePosition: number | undefined;
+        let nodeWrapperSize: number;
+        let primaryPaneOffset: number;
+        
+        if (!paneWrapperRef.current || !panePrimaryRef.current) {
+            return;
+        }
+
+        let wrapper = paneWrapperRef.current.getBoundingClientRect();
+        let primaryPane = panePrimaryRef.current.getBoundingClientRect();
+        let handleBarSize = handlebarRef.current ? handlebarRef.current.getBoundingClientRect() : { left: 0, top: 0 , width: 0, height: 0};
+        const posInHandleBar = position === 'vertical'
+            ? handleBarSize.left - (cX || 0)
+            : handleBarSize.top - (cY || 0);
 
         // find only letters from string
         const regEx = new RegExp(/\D+/gi);
          
-        if (this.props.position === 'vertical') {
+        if (position === 'vertical') {
             // split the maxWidth/maxHeight string to string and numbers
-            let maxWidthStr = this.props.primaryPaneMaxWidth.match(regEx)[0].toLowerCase();
-            let maxWidthNum = parseFloat(this.props.primaryPaneMaxWidth.split(regEx)[0]);
+            let maxWidthStr = primaryPaneMaxWidth!.match(regEx)![0].toLowerCase();
+            let maxWidthNum = parseFloat(primaryPaneMaxWidth!.split(regEx)[0]);
             nodeWrapperSize = wrapper.width;
             primaryPaneOffset = primaryPane.left;
 
@@ -73,8 +166,8 @@ export class Splitter extends React.Component<SplitterProps, SplitterState> {
                     Math.floor((maxWidthNum + primaryPaneOffset) - handleBarSize.width);
             }
         } else {
-            let maxHeightStr = this.props.primaryPaneMaxHeight.match(regEx)[0].toLowerCase();
-            let maxHeightNum = parseFloat(this.props.primaryPaneMaxHeight.split(regEx)[0]);
+            let maxHeightStr = primaryPaneMaxHeight!.match(regEx)![0].toLowerCase();
+            let maxHeightNum = parseFloat(primaryPaneMaxHeight!.split(regEx)[0]);
             nodeWrapperSize = wrapper.height;
             primaryPaneOffset = primaryPane.top;
 
@@ -87,36 +180,101 @@ export class Splitter extends React.Component<SplitterProps, SplitterState> {
             }
         }
 
-        this.setState({
+        let newPosistionState = {
             maxMousePosition
-        });
-    }
+        };
+        setState((prev: SplitterState) => ({
+            ...prev,
+            ...newPosistionState
+        }));
+        return newPosistionState;
+    }, [position, primaryPaneMaxWidth, primaryPaneMaxHeight]);
 
-    componentDidMount() {
+    const handleMouseUp = useCallback((e: any) => {
+        /********************************
+        * Dispatch event is for components which resizes on window resize
+        ********************************/
+        if (!state.isDragging) {
+            return;
+        }
+
+        const {
+            handleBarOffsetFromParent = 0,
+            lastX = 0,
+            lastY = 0,
+            maxMousePosition = 0
+        } = state;
+
+        const primaryPanePosition = getPrimaryPaneWidth(position, lastX, lastY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
+
+        if (postPoned) {
+            setState((prev: SplitterState) => ({
+                ...prev,
+                isDragging: false,
+                isVisible: false,
+                primaryPane: primaryPanePosition
+            }));
+        } else {
+            setState((prev: SplitterState) => ({
+                ...prev,
+                isDragging: false,
+                primaryPane: primaryPanePosition
+            }));
+        }
+
+        document.removeEventListener('mousemove', state.handleMouseMove);
+        document.removeEventListener('touchmove', state.handleMouseMove);
+
+        // call resize event to trigger method for updating of DataGrid width
+        // TODO: add this event for IE11
+        if (typeof dispatchResize === 'boolean') {
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        // callback function from parent component
+        if (typeof onDragFinished === 'function') {
+            onDragFinished();
+        }
+
+        if (React.Children.count(children) > 1) {
+            getSize(e, lastX, lastY);
+        }
+    }, [state.isDragging, state.handleBarOffsetFromParent, state.lastX, state.lastY, state.maxMousePosition, state.handleMouseMove, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned, dispatchResize, onDragFinished, children]);
+
+    // Effect to set up event listeners
+    useEffect(() => {
         /********************************
         * Sets event listeners after component is mounted.
         * If there is only one pane, the resize event listener won't be added
         ********************************/
-        document.addEventListener('mouseup', this.handleMouseUp);
-        document.addEventListener('touchend', this.handleMouseUp);
-        if (React.Children.count(this.props.children) > 1) {
-            window.addEventListener('resize', this.getSize);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('touchend', handleMouseUp);
+        if (React.Children.count(children) > 1) {
+            window.addEventListener('resize', getSize);
         }
-    }
 
-    handleMouseDown(e: any) {
+        return () => {
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('touchend', handleMouseUp);
+            if (React.Children.count(children) > 1) {
+                window.removeEventListener('resize', getSize);
+            }
+        };
+    }, [children, getSize, handleMouseUp]); // Added dependencies
+
+    const handleMouseDown = useCallback((e: any) => {
         /********************************
         * If the right button was clicked - stop the function
         * If there is more then one pane, we get the sizes of panes + max pos of mouse in splitter
         * add event listener for touch move and mouse move
         ********************************/
-        if (e.button === 2 || this.props.allowResize === false) {
+        if (e.button === 2 || allowResize === false) {
             return;
         }
 
-        let handleBarOffsetFromParent;
-        let clientX;
-        let clientY;
+        let handleBarOffsetFromParent: number | undefined;
+        let clientX: number = 0;
+        let clientY: number = 0;
 
         if (e.type === 'mousedown') {
             clientX = e.clientX;
@@ -126,261 +284,156 @@ export class Splitter extends React.Component<SplitterProps, SplitterState> {
             clientY = e.touches[0].clientY;
         }
 
-        if (React.Children.count(this.props.children) > 1) {
-            this.getSize(clientX, clientY);
+        let sizeState;
+        if (React.Children.count(children) > 1) {
+            sizeState = getSize(e, clientX, clientY);
         }
 
-        if (this.props.position === 'horizontal') {
+        if (position === 'horizontal') {
             handleBarOffsetFromParent = clientY - e.target.offsetTop;
-        } else if (this.props.position === 'vertical') {
+        } else if (position === 'vertical') {
             handleBarOffsetFromParent = clientX - e.target.offsetLeft;
         }
 
-        this.setState({
+        const newState = {
             isDragging: true,
-            handleBarOffsetFromParent
-        });
-        document.addEventListener('mousemove', this.handleMouseMove);
-        document.addEventListener('touchmove', this.handleMouseMove);
-    }
-
-    handleMouseMove(e: any) {
-        /********************************
-        * check if the state is still isDragging, if not, stop the function
-        * unselectAll - unselect all selected text
-        * check position of mouse in the splitter and and set the width or height of primary pane
-        * save last positions of X and Y coords (that is necessary for touch screen)
-        ********************************/
-        if (!this.state.isDragging) {
-            return;
-        }
-        
-        unselectAll();
-
-        const {
             handleBarOffsetFromParent,
-            maxMousePosition
-        } = this.state;
+            ...sizeState
+        };
 
-        const {
-            position,
-            primaryPaneMinWidth,
-            primaryPaneMinHeight,
-            postPoned
-        } = this.props;
+        const handleMouseMove = getHandleMouseMove({ ...state, ...newState }, position, primaryPaneMinHeight, primaryPaneMinWidth, postPoned);
+        setState((prev: SplitterState) => ({
+            ...prev,
+            ...newState,
+            handleMouseMove
+        }));
 
-        let clientX;
-        let clientY;
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('touchmove', handleMouseMove);
+    }, [allowResize, children, getSize, position]);
 
-        if (e.type === 'mousemove') {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        } else if (e.type === 'touchmove') {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
+    /********************************
+     * set width of primary pane according to props, or state
+    ********************************/
+    const {
+        handleBarClonePosition,
+        primaryPane,
+        isVisible
+    } = state;
+
+    let paneStyle;
+    switch (position) {
+        case 'vertical': {
+            if (maximizedPrimaryPane) {
+                paneStyle = {
+                    width: '100%',
+                    minWidth: primaryPaneMinWidth,
+                    maxWidth: '100%'
+                };
+            } else if (minimalizedPrimaryPane) {
+                paneStyle = {
+                    width: '0px',
+                    minWidth: 0,
+                    maxWidth: primaryPaneMaxWidth
+                };
+            } else {
+                paneStyle = {
+                    width: primaryPane ? `${primaryPane}px` : primaryPaneWidth,
+                    minWidth: primaryPaneMinWidth,
+                    maxWidth: primaryPaneMaxWidth
+                };
+            }
+            break;
+        }
+        case 'horizontal': {
+            if (maximizedPrimaryPane) {
+                paneStyle = {
+                    height: '100%',
+                    minHeight: 0,
+                    maxHeight: '100%'
+                };
+            } else if (minimalizedPrimaryPane) {
+                paneStyle = {
+                    height: '0px',
+                    minHeight: 0,
+                    maxHeight: primaryPaneMaxHeight
+                };
+            } else {
+                paneStyle = {
+                    height: primaryPane ? `${primaryPane}px` : primaryPaneHeight,
+                    minHeight: primaryPaneMinHeight,
+                    maxHeight: primaryPaneMaxHeight
+                };
+            }
+            break;
         }
 
-        const primaryPanePosition = getPrimaryPaneWidth(position, clientX, clientY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
-
-        if (postPoned) {
-            this.setState({
-                handleBarClonePosition: primaryPanePosition,
-                lastX: clientX,
-                lastY: clientY,
-                isVisible: true
-            });
-        } else {
-            this.setState({
-                primaryPane: primaryPanePosition,
-                lastX: clientX,
-                lastY: clientY
-            });
-        }
+        default:
     }
 
-    handleMouseUp(e: any) {
-        /********************************
-        * Dispatch event is for components which resizes on window resize
-        ********************************/
-        if (!this.state.isDragging) {
-            return;
-        }
-
-        const {
-            handleBarOffsetFromParent,
-            lastX, lastY, maxMousePosition
-        } = this.state;
-
-        const {
-            position,
-            primaryPaneMinWidth,
-            primaryPaneMinHeight,
-            postPoned
-        } = this.props;
-
-        const primaryPanePosition = getPrimaryPaneWidth(position, lastX, lastY, maxMousePosition, handleBarOffsetFromParent, primaryPaneMinHeight, primaryPaneMinWidth);
-
-        if (postPoned) {
-            this.setState({
-                isDragging: false,
-                isVisible: false,
-                primaryPane: primaryPanePosition
-            });
-        } else {
-            this.setState({
-                isDragging: false,
-                primaryPane: primaryPanePosition
-            });
-        }
-
-        document.removeEventListener('mousemove', this.handleMouseMove);
-        document.removeEventListener('touchmove', this.handleMouseMove);
-
-        // call resize event to trigger method for updating of DataGrid width
-        // TODO: add this event for IE11
-        if (typeof this.props.dispatchResize === 'boolean') {
-            window.dispatchEvent(new Event('resize'));
-        }
-
-        // callback function from parent component
-        if (typeof this.props.onDragFinished === 'function') {
-            this.props.onDragFinished();
-        }
-
-        if (React.Children.count(this.props.children) > 1) {
-            this.getSize(lastX, lastY);
-        }
+    let onePaneStyle: any = undefined;
+    if (!children[1]) {
+        onePaneStyle = {
+            width: '100%',
+            maxWidth: '100%',
+            height: '100%'
+        };
     }
 
-    render() {
-        /********************************
-         * set width of primary pane according to props, or state
-        ********************************/
-        const {
-            children, position,
-            primaryPaneMinWidth, primaryPaneWidth, primaryPaneMaxWidth,
-            primaryPaneMinHeight, primaryPaneHeight, primaryPaneMaxHeight,
-            className, primaryPaneClassName, secondaryPaneClassName,
-            maximizedPrimaryPane, minimalizedPrimaryPane, postPoned, allowResize
-        } = this.props;
+    let handlebarClone;
+    if (React.Children.count(children) > 1 && postPoned) {
+        handlebarClone = {
+            [position === 'vertical' ? 'left' : 'top']: handleBarClonePosition + 'px'
+        };
+    }
 
-        const {
-            handleBarClonePosition,
-            primaryPane,
-            isVisible
-        } = this.state;
-
-        let paneStyle;
-        switch (position) {
-            case 'vertical': {
-                if (maximizedPrimaryPane) {
-                    paneStyle = {
-                        width: '100%',
-                        minWidth: primaryPaneMinWidth,
-                        maxWidth: '100%'
-                    };
-                } else if (minimalizedPrimaryPane) {
-                    paneStyle = {
-                        width: '0px',
-                        minWidth: 0,
-                        maxWidth: primaryPaneMaxWidth
-                    };
-                } else {
-                    paneStyle = {
-                        width: primaryPane ? `${primaryPane}px` : primaryPaneWidth,
-                        minWidth: primaryPaneMinWidth,
-                        maxWidth: primaryPaneMaxWidth
-                    };
-                }
-                break;
-            }
-            case 'horizontal': {
-                if (maximizedPrimaryPane) {
-                    paneStyle = {
-                        height: '100%',
-                        minHeight: 0,
-                        maxHeight: '100%'
-                    };
-                } else if (minimalizedPrimaryPane) {
-                    paneStyle = {
-                        height: '0px',
-                        minHeight: 0,
-                        maxHeight: primaryPaneMaxHeight
-                    };
-                } else {
-                    paneStyle = {
-                        height: primaryPane ? `${primaryPane}px` : primaryPaneHeight,
-                        minHeight: primaryPaneMinHeight,
-                        maxHeight: primaryPaneMaxHeight
-                    };
-                }
-                break;
-            }
-        }
-
-        if (!children[1]) {
-            var onePaneStyle: any = {
-                width: '100%',
-                maxWidth: '100%',
-                height: '100%'
-            };
-        }
-
-        let handlebarClone;
-        if (React.Children.count(children) > 1 && postPoned) {
-            handlebarClone = {
-                [position === 'vertical' ? 'left' : 'top']: handleBarClonePosition + 'px'
-            };
-        }
-
-        return (
-            <div
-                className={`splitter ${position === 'vertical' ? 'vertical' : 'horizontal'} ${className || ''}`}
-                style={onePaneStyle !== 'undefined' ? onePaneStyle : null}
-                ref={node => this.paneWrapper = node}
+    return (
+        <div
+            className={`splitter ${position === 'vertical' ? 'vertical' : 'horizontal'} ${className || ''}`}
+            style={onePaneStyle || null}
+            ref={paneWrapperRef}
+        >
+            <Pane
+                className={`primary ${primaryPaneClassName || ''}`}
+                position={position}
+                style={paneStyle}
+                ref={panePrimaryRef}
             >
-                <Pane
-                    className={`primary ${primaryPaneClassName || ''}`}
-                    position={position}
-                    style={paneStyle}
-                    ref={(node) => this.panePrimary = node}
-                >
-                    {!children[1] ? children : children[0]}
-                </Pane>
+                {!children[1] ? children : children[0]}
+            </Pane>
 
-                {
-                    children[1]
-                        ? <HandleBar
-                            position={position}
-                            handleMouseDown={this.handleMouseDown}
-                            ref={node => this.handlebar = node}
-                            allowResize={allowResize}
-                        />
-                        : null
-                }
+            {
+                children[1]
+                    ? <HandleBar
+                        position={position}
+                        handleMouseDown={handleMouseDown}
+                        ref={handlebarRef}
+                        allowResize={allowResize}
+                    />
+                    : null
+            }
 
-                {
-                    postPoned && isVisible
-                        ? <div
-                            className={`handle-bar handle-bar_clone ${position === 'vertical' ? 'vertical' : 'horizontal'} `}
-                            style={handlebarClone}
-                        />
-                        : null
-                }
+            {
+                postPoned && isVisible
+                    ? <div
+                        className={`handle-bar handle-bar_clone ${position === 'vertical' ? 'vertical' : 'horizontal'} `}
+                        style={handlebarClone}
+                    />
+                    : null
+            }
 
-                {
-                    children[1]
-                        ? <Pane
-                            className={secondaryPaneClassName || ''}
-                            position={position}
-                            hasDetailPane={this.props.hasDetailPane}
-                            ref={node => this.paneNotPrimary = node}
-                        >
-                            {children[1]}
-                        </Pane>
-                        : null
-                }
-            </div>
-        );
-    };
-}
+            {
+                children[1]
+                    ? <Pane
+                        className={secondaryPaneClassName || ''}
+                        position={position}
+                        hasDetailPane={hasDetailPane}
+                        ref={paneNotPrimaryRef}
+                    >
+                        {children[1]}
+                    </Pane>
+                    : null
+            }
+        </div>
+    );
+});
